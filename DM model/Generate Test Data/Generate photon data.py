@@ -44,16 +44,14 @@ from astropy import units as u
 # get_ipython().run_line_magic('matplotlib', 'inline')
 
 
-# In[ ]:
+# In[3]:
 
 
 grains=1000
-num_simulations = 160
-sims_already_generated = 320
-num_workers = 16
+num_workers = 48
 
 
-# In[ ]:
+# In[4]:
 
 
 energy_range = [1_000, 100_000] #MeV 
@@ -77,11 +75,8 @@ lat_cut = lat_cut_degrees*u.deg.to('rad') # radians
 lat_cut_gen = lat_cut*0.5 # radians
 
 
-# In[ ]:
+# In[5]:
 
-
-# my_cosmology = 'Planck18'
-# z_range = [0, 14]
 
 # AEGIS object for Dark matter signal
 def build_aegis_object():
@@ -93,7 +88,7 @@ def build_aegis_object():
     return engine
 
 
-# In[7]:
+# In[6]:
 
 
 # 1) Point to your data directory and choose a channel
@@ -107,7 +102,7 @@ dm = DMsignal.DMsignal(directory=data_dir, channel=channel)
 
 # Dark Matter Model
 
-# In[8]:
+# In[7]:
 
 
 def DM_abundance(r, L, params): # Outputs the abundance function in the form dN/dV/dL. Note the dV.
@@ -236,7 +231,7 @@ als_DM = [DM_abundance_wrapper, DM_spectrum]
 
 # Background signal
 
-# In[9]:
+# In[8]:
 
 
 # Add Fermi isotropic background source class
@@ -253,7 +248,7 @@ def spec_iso_wrap(energy, params):
 als_FIB = [spec_iso_wrap]
 
 
-# In[10]:
+# In[9]:
 
 
 # a simple simulator with the total number of photons as the summary statistic
@@ -269,99 +264,27 @@ def simulator(my_AEGIS, params):
     return obs_photon_info
 
 
-# Generate Training Data
-
-# In[ ]:
-
-
-def manual_simulate_for_sbi(proposal, num_simulations=1000, num_workers=32):
-    """
-    Simulates the model in parallel using joblib.
-    Each simulation call samples a parameter from the proposal and passes the index to the simulator.
-    """
-    def run_simulation(i):
-        if i % 10 == 0:
-            print(f"i= {i}")
-
-        # torch.set_num_threads(1)
-        # torch.set_num_interop_threads(1)
-        
-        # Sample a parameter from the proposal (sbi.utils.BoxUniform has a .sample() method
-        theta_i = proposal.sample()
-        params_DM, params_BG = theta_i[[0,2]], theta_i[[1]]
-
-        # Instatantiate the AEGIS object for DM and Background
-        obj_AEGIS = build_aegis_object()
-
-        # Configure the AEGIS object for DM
-        obj_AEGIS.abun_lum_spec = [als_DM]
-        obj_AEGIS.source_class_list = ['isotropic_faint_single_spectrum']
-
-        # Run the simulator for DM data
-        photon_info_DM = simulator(obj_AEGIS, params_DM)
-
-        # Configure the AEGIS object for Background
-        obj_AEGIS.abun_lum_spec =  [als_FIB] 
-        obj_AEGIS.source_class_list = ['isotropic_diffuse']
-
-        # Run the simulator for Background data
-        photon_info_BG = simulator(obj_AEGIS, params_BG)
-
-        # Save the photon information and theta parameters to files.
-        with open(f'train_data_DM_feynman_{i + sims_already_generated}.pkl', 'wb') as f:
-            pickle.dump(photon_info_DM, f)
-        with open(f'train_data_BG_feynman_{i + sims_already_generated}.pkl', 'wb') as f:
-            pickle.dump(photon_info_BG, f)
-
-        torch.save(params_DM, f'train_thetas_DM_feynman_{i + sims_already_generated}.pt')
-        torch.save(params_BG, f'train_thetas_BG_feynman_{i + sims_already_generated}.pt')
-
-        # # atomically write once per job
-        # torch.save({'data_DM': photon_info_DM, 'data_BG': photon_info_BG,
-        #             'θ_DM': params_DM, 'θ_BG': params_BG},
-        #         f'kerr_data/job_{i:05}.pt')
-
-
-    # Run simulations in parallel using joblib.
-    # Switch to the threading backend
-    with parallel_backend('threading', n_jobs=num_workers):
-        Parallel(timeout=None)(delayed(run_simulation)(i) for i in range(num_simulations))
-
-
-# In[ ]:
-
-
-# Define the prior using sbi.utils.BoxUniform
-A_DM_training_range = [100, 500]
-A_BG_training_range = [0.8, 1.1]
-M_chi_training_range = [150, 350] # mass of DM particle in GeV
-
-prior_range = torch.tensor([[A_DM_training_range[0], A_BG_training_range[0],  M_chi_training_range[0]],
-                            [A_DM_training_range[1], A_BG_training_range[1], M_chi_training_range[1]]])
-
-prior = utils.BoxUniform(low=prior_range[0], high=prior_range[1])
-print(f"low = {prior_range[0]}, high = {prior_range[1]}")
-
-manual_simulate_for_sbi(prior, num_simulations=num_simulations, num_workers=num_workers)
-
+# Run simulations in parallel
 
 # Load Test parameters
 
-# In[ ]:
+# In[10]:
 
 
-# # ────────────────────────────────────────────────────────────────────────
-# # 3)  Ask the object for its default model parameters
-# #     (mass, amplitude, background).  These numbers come straight from
-# #     the get_default_model() method you showed.
-# # ────────────────────────────────────────────────────────────────────────
-# model_defaults = dm.get_default_model()        # {'A_DM': …, 'A_BG': …, 'mass_DM_MeV': …}
-# mass_DM_MeV_test    = model_defaults["mass_DM_MeV"]  # MeV
-# mass_DM_GeV_test    = mass_DM_MeV_test / 1e3                  # GeV
-# A_DM_test           = model_defaults["A_DM"] # unitless
-# A_BG_test           = model_defaults["A_BG"]
 
-# print(f"A_DM_test = {A_DM_test}; mass_DM_GeV_test = {mass_DM_GeV_test}; A_BG_test = {A_BG_test}")
+
+# ────────────────────────────────────────────────────────────────────────
+# 3)  Ask the object for its default model parameters
+#     (mass, amplitude, background).  These numbers come straight from
+#     the get_default_model() method you showed.
+# ────────────────────────────────────────────────────────────────────────
+model_defaults = dm.get_default_model()        # {'A_DM': …, 'A_BG': …, 'mass_DM_MeV': …}
+mass_DM_MeV_test    = model_defaults["mass_DM_MeV"]  # MeV
+mass_DM_GeV_test    = mass_DM_MeV_test / 1e3                  # GeV
+A_DM_test           = model_defaults["A_DM"] # unitless
+A_BG_test           = model_defaults["A_BG"]
+
+print(f"A_DM_test = {A_DM_test}; mass_DM_GeV_test = {mass_DM_GeV_test}; A_BG_test = {A_BG_test}")
 
 
 
@@ -369,7 +292,7 @@ manual_simulate_for_sbi(prior, num_simulations=num_simulations, num_workers=num_
 
 # Generate Test Data
 
-# Both DM and Background singals
+# Both DM and Background singals w/ nominal values of parameters
 
 # In[ ]:
 
@@ -388,20 +311,86 @@ manual_simulate_for_sbi(prior, num_simulations=num_simulations, num_workers=num_
 # photon_info_DM_test = simulator(obj_AEGIS, params_DM_test)
 
 # # Configure the AEGIS object for Background
-# obj_AEGIS.abun_lum_spec =  [als_FIB] 
+# obj_AEGIS.abun_lum_spec =  [als_FIB]
 # obj_AEGIS.source_class_list = ['isotropic_diffuse']
 
 # # Run the simulator for Background data
 # photon_info_BG_test = simulator(obj_AEGIS, params_BG_test)
 
-# # # Save the photon information and theta parameters to files.
-# # with open(f'test_data_DM.pkl', 'wb') as f:
-# #     pickle.dump(photon_info_DM_test, f)
-# # with open(f'test_data_BG.pkl', 'wb') as f:
-# #     pickle.dump(photon_info_BG_test, f)
+# # Save the photon information and theta parameters to files.
+# with open(f'test_data_DM.pkl', 'wb') as f:
+#     pickle.dump(photon_info_DM_test, f)
+# with open(f'test_data_BG.pkl', 'wb') as f:
+#     pickle.dump(photon_info_BG_test, f)
 
-# # torch.save(params_DM_test, f'test_thetas_DM.pt')
-# # torch.save(params_BG_test, f'test_thetas_BG.pt')
+# torch.save(params_DM_test, f'test_thetas_DM.pt')
+# torch.save(params_BG_test, f'test_thetas_BG.pt')
+
+
+# Both DM and Background signals w/ max A_DM, max A_BG, and 10 values of M_DM - to decide the max counts-in-a-pixel in each energy bin for the 2D histogram
+
+# In[ ]:
+
+
+def manual_simulate_for_sbi(A_BG, A_DM, M_DM, num_workers=11):
+    """
+    Simulates the model in parallel using joblib.
+    Each simulation call samples a parameter from the proposal and passes the index to the simulator.
+    """
+    def run_simulation(i, A_BG, A_DM, M_val):
+        print(f"i={i} M_DM={M_val} A_BG={A_BG} A_DM={A_DM}")
+
+        params_DM = torch.tensor([A_DM, M_val], dtype=torch.float64)
+        params_BG = torch.tensor([A_BG], dtype=torch.float64)
+
+        # Instatantiate the AEGIS object for DM and Background
+        obj_AEGIS = build_aegis_object()
+
+        # Configure the AEGIS object for DM
+        obj_AEGIS.abun_lum_spec = [als_DM]
+        obj_AEGIS.source_class_list = ['isotropic_faint_single_spectrum']
+
+        # Run the simulator for DM data
+        photon_info_DM = simulator(obj_AEGIS, params_DM)
+
+        # Configure the AEGIS object for Background
+        obj_AEGIS.abun_lum_spec =  [als_FIB] 
+        obj_AEGIS.source_class_list = ['isotropic_diffuse']
+
+        # Run the simulator for Background data
+        photon_info_BG = simulator(obj_AEGIS, params_BG)
+
+
+        # Combine DM and Background photon info
+        combined_angles = np.concatenate((photon_info_BG['angles'], photon_info_DM['angles']), axis=0) # vetcical stack
+        combined_energies  = np.concatenate((photon_info_BG['energies'], photon_info_DM['energies']), axis=0) # vertical stack
+        data_dictionary = {
+        'angles': combined_angles,
+        'energies': combined_energies
+        }
+
+        # Save the photon information and theta parameters to files.
+        with open(f'/home/users/ids29/DGRB Scripts/DM model/Generate Test Data/Max photon data/max_photon_data{i}.pkl', 'wb') as f:
+            pickle.dump(data_dictionary, f)
+            
+
+    with parallel_backend('threading', n_jobs=int(min(num_workers, M_DM.size))):
+        Parallel(timeout=None)(delayed(run_simulation)(i, A_BG, A_DM, m) for i, m in enumerate(M_DM))
+
+
+# In[12]:
+
+
+# Define the prior using sbi.utils.BoxUniform
+# A_DM_training_range = [100, 500]
+# A_BG_training_range = [0.8, 1.1]
+# M_chi_training_range = [150, 350] # mass of DM particle in GeV
+
+A_BG = 1.1
+A_DM = 500.0
+M_DM = np.linspace(150.0, 350.0, 11) # mass of DM particle in GeV
+
+manual_simulate_for_sbi(A_BG, A_DM, M_DM, num_workers=11)
 
 
 # Only Background signal

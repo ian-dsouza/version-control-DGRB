@@ -7,14 +7,14 @@
 # get_ipython().run_line_magic('reset', '')
 
 
-# In[2]:
+# In[1]:
 
 
 import sys
 sys.path.append('/home/users/ids29/DGRB')
 
 
-# In[3]:
+# In[2]:
 
 
 import aegis
@@ -48,9 +48,9 @@ from astropy import units as u
 
 
 grains=1000
-num_simulations = 160
-sims_already_generated = 320
-num_workers = 16
+num_simulations = 480
+sims_already_generated = 960
+num_workers = 48
 
 
 # In[ ]:
@@ -308,13 +308,13 @@ def manual_simulate_for_sbi(proposal, num_simulations=1000, num_workers=32):
         photon_info_BG = simulator(obj_AEGIS, params_BG)
 
         # Save the photon information and theta parameters to files.
-        with open(f'train_data_DM_feynman_{i + sims_already_generated}.pkl', 'wb') as f:
+        with open(f'train_data_DM_kerr_{i + sims_already_generated}.pkl', 'wb') as f:
             pickle.dump(photon_info_DM, f)
-        with open(f'train_data_BG_feynman_{i + sims_already_generated}.pkl', 'wb') as f:
+        with open(f'train_data_BG_kerr_{i + sims_already_generated}.pkl', 'wb') as f:
             pickle.dump(photon_info_BG, f)
 
-        torch.save(params_DM, f'train_thetas_DM_feynman_{i + sims_already_generated}.pt')
-        torch.save(params_BG, f'train_thetas_BG_feynman_{i + sims_already_generated}.pt')
+        torch.save(params_DM, f'train_thetas_DM_kerr_{i + sims_already_generated}.pt')
+        torch.save(params_BG, f'train_thetas_BG_kerr_{i + sims_already_generated}.pt')
 
         # # atomically write once per job
         # torch.save({'data_DM': photon_info_DM, 'data_BG': photon_info_BG,
@@ -338,6 +338,16 @@ M_chi_training_range = [150, 350] # mass of DM particle in GeV
 
 prior_range = torch.tensor([[A_DM_training_range[0], A_BG_training_range[0],  M_chi_training_range[0]],
                             [A_DM_training_range[1], A_BG_training_range[1], M_chi_training_range[1]]])
+
+# print(f"prior_range = {prior_range}")
+
+# To save prior range only
+# --------------------------------------------
+prior_range_to_save = torch.tensor([[A_BG_training_range[0], A_DM_training_range[0],  M_chi_training_range[0]],
+                            [A_BG_training_range[1], A_DM_training_range[1], M_chi_training_range[1]]])
+torch.save(prior_range_to_save, 'prior_range.pt')
+
+#----------------------------------------------
 
 prior = utils.BoxUniform(low=prior_range[0], high=prior_range[1])
 print(f"low = {prior_range[0]}, high = {prior_range[1]}")

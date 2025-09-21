@@ -4,7 +4,7 @@
 # In[ ]:
 
 
-# %reset
+# get_ipython().run_line_magic('reset', '')
 
 
 # In[2]:
@@ -41,7 +41,7 @@ import sources.FermiBackgrounds as FermiBackgrounds
 from astropy import units as u
 
 
-# %matplotlib inline
+# get_ipython().run_line_magic('matplotlib', 'inline')
 
 
 # In[ ]:
@@ -49,6 +49,7 @@ from astropy import units as u
 
 grains=1000
 num_simulations = 160
+sims_already_generated = 320
 num_workers = 16
 
 
@@ -307,13 +308,13 @@ def manual_simulate_for_sbi(proposal, num_simulations=1000, num_workers=32):
         photon_info_BG = simulator(obj_AEGIS, params_BG)
 
         # Save the photon information and theta parameters to files.
-        with open(f'train_data_DM_bohr_{i}.pkl', 'wb') as f:
+        with open(f'train_data_DM_bohr_{i + sims_already_generated}.pkl', 'wb') as f:
             pickle.dump(photon_info_DM, f)
-        with open(f'train_data_BG_bohr_{i}.pkl', 'wb') as f:
+        with open(f'train_data_BG_bohr_{i + sims_already_generated}.pkl', 'wb') as f:
             pickle.dump(photon_info_BG, f)
 
-        torch.save(params_DM, f'train_thetas_DM_bohr_{i}.pt')
-        torch.save(params_BG, f'train_thetas_BG_bohr_{i}.pt')
+        torch.save(params_DM, f'train_thetas_DM_bohr_{i + sims_already_generated}.pt')
+        torch.save(params_BG, f'train_thetas_BG_bohr_{i + sims_already_generated}.pt')
 
         # # atomically write once per job
         # torch.save({'data_DM': photon_info_DM, 'data_BG': photon_info_BG,
